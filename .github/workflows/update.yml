@@ -34,9 +34,9 @@ jobs:
           sed -i.bak -E "s@(url \").*(\")@\1${URL}\2@" "$FILE"
           sed -i.bak -E "s@(sha256 \").*(\")@\1${SHA}\2@" "$FILE"
           
-          sed -i.bak -E "s@\(\\@github/copilot-language-server\)@[0-9]+\.[0-9]+\.[0-9]+@\1${VERSION}@" "$FILE"
+          # sed -i.bak -E "s@\(\\@github/copilot-language-server\)@[0-9]+\.[0-9]+\.[0-9]+@\1${VERSION}@" "$FILE"
           # Update version in the formula (use | as delimiter)
-          # sed -i.bak -E "s|(@github/copilot-language-server)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|" "$FILE"
+          sed -i.bak -E "s|(@github/copilot-language-server)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|" "$FILE"
           
           rm "$FILE.bak"
           
