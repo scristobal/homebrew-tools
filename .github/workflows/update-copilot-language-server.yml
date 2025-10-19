@@ -11,34 +11,42 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      NPM_PACKAGE: "@github/copilot-language-server"
+      PACKAGE_TARBALL_NAME: "copilot-language-server"
+      FORMULA_NAME: "copilot-language-server"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
       - name: Get latest version from npm
         id: npm
         run: |
-          VERSION=$(npm view @github/copilot-language-server version)
+          VERSION=$(npm view $NPM_PACKAGE version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Download tarball and compute SHA256
         id: sha
         run: |
-          URL="https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-${{ steps.npm.outputs.version }}.tgz"
+          URL="https://registry.npmjs.org/$NPM_PACKAGE/-/$PACKAGE_TARBALL_NAME-${{ steps.npm.outputs.version }}.tgz"
           curl -L "$URL" -o copilot.tgz
           SHA=$(shasum -a 256 copilot.tgz | awk '{print $1}')
           echo "sha=$SHA" >> $GITHUB_OUTPUT
       - name: Update Formula
         run: |
-          FILE="Formula/copilot-language-server.rb"
+          FILE="Formula/$FORMULA_NAME.rb"
           VERSION="${{ steps.npm.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha }}"
-          URL="https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-${VERSION}.tgz"
+          URL="https://registry.npmjs.org/$NPM_PACKAGE/-/$PACKAGE_TARBALL_NAME-${VERSION}.tgz"
 
           perl -pi -e "s|url \".*\"|url \"${URL}\"|" "$FILE"
           perl -pi -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" "$FILE"
-          perl -pi -e "s|@github/copilot-language-server[0-9]+\.[0-9]+\.[0-9]+|@github/copilot-language-server${VERSION}|" "$FILE"
+          perl -pi -e "s|$NPM_PACKAGE@[0-9]+\.[0-9]+\.[0-9]+|$NPM_PACKAGE@${VERSION}|" "$FILE"
 
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add "$FILE"
-          git commit -m "chore: bump copilot-language-server to v${VERSION}" || echo "No changes"
-          git push
+          if git diff --quiet "$FILE"; then
+            echo "No changes to commit"
+          else
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git add "$FILE"
+            git commit -m "chore: bump $FORMULA_NAME to v${VERSION}"
+            git push
+          fi
