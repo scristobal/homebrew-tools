@@ -1,0 +1,43 @@
+name: Update Copilot Language Server Formula
+
+on:
+  schedule:
+    - cron: "0 12 * * *"  # run daily at noon UTC
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+      - name: Get latest version from npm
+        id: npm
+        run: |
+          VERSION=$(npm view @github/copilot-language-server version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Download tarball and compute SHA256
+        id: sha
+        run: |
+          URL="https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-${{ steps.npm.outputs.version }}.tgz"
+          curl -L "$URL" -o copilot.tgz
+          SHA=$(shasum -a 256 copilot.tgz | awk '{print $1}')
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+      - name: Update Formula
+        run: |
+          FILE="Formula/copilot-language-server.rb"
+          VERSION="${{ steps.npm.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha }}"
+          URL="https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-${VERSION}.tgz"
+
+          sed -i.bak -E "s@(url \").*(\")@\1${URL}\2@" "$FILE"
+          sed -i.bak -E "s@(sha256 \").*(\")@\1${SHA}\2@" "$FILE"
+          sed -i.bak -E "s@(@github/copilot-language-server@)[0-9]+\.[0-9]+\.[0-9]+@\1${VERSION}@" "$FILE"
+          rm "$FILE.bak"
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add "$FILE"
+          git commit -m "chore: bump copilot-language-server to v${VERSION}" || echo "No changes"
+          git push
+
