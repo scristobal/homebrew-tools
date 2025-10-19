@@ -39,7 +39,7 @@ jobs:
 
           perl -pi -e "s|url \".*\"|url \"${URL}\"|" "$FILE"
           perl -pi -e "s|sha256 \".*\"|sha256 \"${SHA}\"|" "$FILE"
-          perl -pi -e "s|$NPM_PACKAGE@[0-9]+\.[0-9]+\.[0-9]+|$NPM_PACKAGE@${VERSION}|" "$FILE"
+          perl -pi -e "s|\Q$NPM_PACKAGE\E\@[0-9]+\.[0-9]+\.[0-9]+|$NPM_PACKAGE\@${VERSION}|" "$FILE"
 
           if git diff --quiet "$FILE"; then
             echo "No changes to commit"
