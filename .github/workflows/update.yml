@@ -29,15 +29,19 @@ jobs:
           VERSION="${{ steps.npm.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha }}"
           URL="https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-${VERSION}.tgz"
-
+          
+          # Update URL and SHA
           sed -i.bak -E "s@(url \").*(\")@\1${URL}\2@" "$FILE"
           sed -i.bak -E "s@(sha256 \").*(\")@\1${SHA}\2@" "$FILE"
-          sed -i.bak -E "s@(@github/copilot-language-server@)[0-9]+\.[0-9]+\.[0-9]+@\1${VERSION}@" "$FILE"
+          
+          sed -i.bak -E "s@\(\\@github/copilot-language-server\)@[0-9]+\.[0-9]+\.[0-9]+@\1${VERSION}@" "$FILE"
+          # Update version in the formula (use | as delimiter)
+          # sed -i.bak -E "s|(@github/copilot-language-server)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|" "$FILE"
+          
           rm "$FILE.bak"
-
+          
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add "$FILE"
           git commit -m "chore: bump copilot-language-server to v${VERSION}" || echo "No changes"
           git push
-
