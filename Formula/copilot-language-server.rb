@@ -10,7 +10,7 @@ class CopilotLanguageServer < Formula
   depends_on "node"
 
   def install
-    system "npm", "install", *Language::Node.std_npm_install_args(libexec), "@github/copilot-language-server.384.0"
+    system "npm", "install", *Language::Node.std_npm_install_args(libexec), "@github/copilot-language-server@1.384.0"
     bin.install_symlink Dir["#{libexec}/bin/*"]
   end
 
