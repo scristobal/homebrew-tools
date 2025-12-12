@@ -3,14 +3,14 @@ require "language/node"
 class CopilotLanguageServer < Formula
   desc "GitHub Copilot Language Server"
   homepage "https://github.com/github/copilot-language-server"
-  url "https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-1.403.0.tgz"
-  sha256 "f8c10c188b1daf728a4fa39f34b3e8e2fabfb3799156193f55f82d19c4585448"
+  url "https://registry.npmjs.org/@github/copilot-language-server/-/copilot-language-server-1.405.0.tgz"
+  sha256 "82475afcb629ca9a2e27b3fa38f33d4c1e4990351b5fa00f42feb540bc4244fc"
   license "MIT"
 
   depends_on "node"
 
   def install
-    system "npm", "install", *Language::Node.std_npm_install_args(libexec), "@github/copilot-language-server@1.403.0"
+    system "npm", "install", *Language::Node.std_npm_install_args(libexec), "@github/copilot-language-server@1.405.0"
     bin.install_symlink Dir["#{libexec}/bin/*"]
   end
 
