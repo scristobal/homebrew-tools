@@ -1,4 +1,4 @@
-name: Update Emulicious Formula
+name: Update Emulicious Cask
 
 on:
   schedule:
@@ -38,13 +38,13 @@ jobs:
           SHA=$(sha256sum "$ZIP" | awk '{print $1}')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
-      - name: Update formula and commit changes
+      - name: Update cask and commit changes
         env:
           VERSION: ${{ steps.release.outputs.version }}
           SHA: ${{ steps.release.outputs.sha256 }}
         run: |
           set -euo pipefail
-          FILE="Formula/emulicious.rb"
+          FILE="Casks/emulicious.rb"
           sed -i -E "s/^  version \".*\"$/  version \"${VERSION}\"/" "$FILE"
           sed -i -E "s/^  sha256 \".*\"$/  sha256 \"${SHA}\"/" "$FILE"
           ruby -c "$FILE"

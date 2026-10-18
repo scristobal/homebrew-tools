@@ -52,12 +52,14 @@ their SHA256s, and commits version/checksum changes to the default branch.
 
 Emulicious (macOS)
 
-brew install samu/tools/emulicious
+brew install --cask samu/tools/emulicious
 
-Runs the official Emulicious.jar with Homebrew's openjdk. The emulicious command
-keeps a per-user copy in ~/Library/Application Support/Emulicious, where
-Emulicious also stores its settings, saves and save states, so they survive
-upgrades. Update it with brew upgrade rather than its built-in updater.
+Upstream only ships a cross-platform jar, so the cask wraps it in a minimal
+Emulicious.app that runs it with Homebrew's openjdk; the emulicious command
+starts the same app. Both run a per-user copy in
+~/Library/Application Support/Emulicious, where Emulicious also stores its
+settings, saves and save states, so they survive upgrades. Update it with
+brew upgrade --cask rather than its built-in updater.
 
 .github/workflows/update-emulicious.yml downloads the unversioned zip daily and
 can also be run manually. It reads the release date from WhatsNew.txt, computes
