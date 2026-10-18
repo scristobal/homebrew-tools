@@ -66,3 +66,15 @@ can also be run manually. It reads the release date from WhatsNew.txt, computes
 the SHA256, and commits version/checksum changes to the default branch. Between
 an upstream release and the next run, installs fail with a checksum mismatch;
 run the workflow manually to catch up sooner.
+
+Edit fork (macOS)
+
+brew unlink msedit
+brew install --HEAD samu/tools/edit-fork
+
+Builds Microsoft Edit from the main branch of github.com/scristobal/edit with
+Homebrew's rust. There is no stable version, so --HEAD is required. It
+conflicts with homebrew-core's msedit because both install an edit binary;
+unlink msedit first, or brew link msedit again after uninstalling edit-fork.
+To rebuild from the latest commit on the fork:
+brew upgrade --fetch-HEAD edit-fork
