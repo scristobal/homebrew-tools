@@ -78,3 +78,25 @@ conflicts with homebrew-core's msedit because both install an edit binary;
 unlink msedit first, or brew link msedit again after uninstalling edit-fork.
 To rebuild from the latest commit on the fork:
 brew upgrade --fetch-HEAD edit-fork
+
+Rust tools from crates.io
+
+brew install samu/tools/build-pbf-glyphs
+brew install samu/tools/cargo-aoc
+brew install samu/tools/cargo-ndk
+brew install samu/tools/cargo-swift
+brew install samu/tools/shader-language-server
+
+Each formula builds the published .crate from crates.io with Homebrew's rust,
+using the Cargo.lock shipped inside it. .github/workflows/update-<formula>.yml
+checks crates.io daily for the latest stable version and can also be run
+manually. It downloads the .crate, computes its SHA256, and commits url/checksum
+changes to the default branch.
+
+cargo-tree-tui
+
+brew install --HEAD samu/tools/cargo-tree-tui
+
+Upstream (github.com/orhun/cargo-tree-tui) has no releases, tags or crates.io
+package, so the formula only builds the latest commit on main. To rebuild:
+brew upgrade --fetch-HEAD cargo-tree-tui

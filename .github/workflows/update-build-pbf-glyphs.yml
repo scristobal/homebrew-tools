@@ -1,0 +1,72 @@
+name: Update build-pbf-glyphs Formula
+
+on:
+  schedule:
+    - cron: "7 12 * * *"  # run daily at 12:07 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-build-pbf-glyphs
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CRATE: "build_pbf_glyphs"
+      FORMULA_NAME: "build-pbf-glyphs"
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Get latest stable version from crates.io and compute SHA256
+        id: crate
+        run: |
+          set -euo pipefail
+          # crates.io rejects API requests without a User-Agent.
+          VERSION=$(curl --fail --silent --show-error --location --retry 3 \
+            -A "${GITHUB_REPOSITORY} formula updater (https://github.com/${GITHUB_REPOSITORY})" \
+            "https://crates.io/api/v1/crates/${CRATE}" \
+            | jq -er '.crate.max_stable_version')
+          URL="https://static.crates.io/crates/${CRATE}/${CRATE}-${VERSION}.crate"
+
+          CRATE_FILE=$(mktemp)
+          trap 'rm -f "$CRATE_FILE"' EXIT
+          curl --fail --location --retry 3 "$URL" --output "$CRATE_FILE"
+          SHA=$(sha256sum "$CRATE_FILE" | awk '{print $1}')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update formula and commit changes
+        env:
+          VERSION: ${{ steps.crate.outputs.version }}
+          URL: ${{ steps.crate.outputs.url }}
+          SHA: ${{ steps.crate.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          FILE="Formula/${FORMULA_NAME}.rb"
+          perl -pi -e '
+            s{url "https://static\.crates\.io/[^"]+"}{url "$ENV{URL}"};
+            s{sha256 "[0-9a-f]{64}"}{sha256 "$ENV{SHA}"};
+          ' "$FILE"
+          ruby -c "$FILE"
+          grep -qF "url \"${URL}\"" "$FILE"
+          grep -qF "sha256 \"${SHA}\"" "$FILE"
+
+          if git diff --quiet -- "$FILE"; then
+            echo "${FORMULA_NAME} is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: bump ${FORMULA_NAME} to v${VERSION}"
+          # Other formula updaters may have pushed while the crate was downloading.
+          git pull --rebase origin "$DEFAULT_BRANCH"
+          git push origin "HEAD:$DEFAULT_BRANCH"
