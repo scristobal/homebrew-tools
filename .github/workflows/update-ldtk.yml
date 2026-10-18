@@ -1,0 +1,80 @@
+name: Update LDtk Cask
+
+on:
+  schedule:
+    - cron: "37 12 * * *"  # run daily at 12:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-ldtk
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Get latest stable release and compute SHA256
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RELEASE=$(curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/deepnight/ldtk/releases/latest)
+          VERSION=$(jq -er '
+            select(.draft == false and .prerelease == false)
+            | .tag_name
+            | capture("^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$").version
+          ' <<< "$RELEASE")
+          URL="https://github.com/deepnight/ldtk/releases/download/v${VERSION}/mac-distribution.zip"
+          # Fail rather than publish a version whose macOS asset is not available yet.
+          jq -e --arg url "$URL" '.assets | any(.browser_download_url == $url)' \
+            <<< "$RELEASE" > /dev/null
+
+          ZIP=$(mktemp)
+          trap 'rm -f "$ZIP"' EXIT
+          curl --fail --location --retry 3 "$URL" --output "$ZIP"
+          # Homebrew only auto-extracts the inner DMG when it is the zip's sole entry.
+          ENTRIES=$(unzip -Z1 "$ZIP")
+          if [ "$(wc -l <<< "$ENTRIES")" -ne 1 ] || [[ "$ENTRIES" != *.dmg ]]; then
+            echo "Expected a single DMG inside mac-distribution.zip, found:" >&2
+            echo "$ENTRIES" >&2
+            exit 1
+          fi
+          SHA=$(sha256sum "$ZIP" | awk '{print $1}')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update cask and commit changes
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA: ${{ steps.release.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          FILE="Casks/ldtk.rb"
+          sed -i -E "s/^  version \".*\"$/  version \"${VERSION}\"/" "$FILE"
+          sed -i -E "s/^  sha256 \".*\"$/  sha256 \"${SHA}\"/" "$FILE"
+          ruby -c "$FILE"
+
+          if git diff --quiet -- "$FILE"; then
+            echo "LDtk is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: bump ldtk to v${VERSION}"
+          # Other formula updaters may have pushed while the zip was downloading.
+          git pull --rebase origin "$DEFAULT_BRANCH"
+          git push origin "HEAD:$DEFAULT_BRANCH"

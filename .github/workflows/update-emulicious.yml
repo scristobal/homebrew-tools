@@ -1,0 +1,63 @@
+name: Update Emulicious Formula
+
+on:
+  schedule:
+    - cron: "57 12 * * *"  # run daily at 12:57 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-emulicious
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Download latest release and compute SHA256
+        id: release
+        run: |
+          set -euo pipefail
+          ZIP=$(mktemp)
+          trap 'rm -f "$ZIP"' EXIT
+          # The download URL is unversioned and the server sometimes refuses connections.
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 15 \
+            "https://emulicious.net/download/emulicious/?wpdmdl=205" --output "$ZIP"
+          unzip -tq "$ZIP"
+          # Releases are named after their date, the first heading in WhatsNew.txt.
+          NOTES=$(unzip -p "$ZIP" WhatsNew.txt | tr -d '\r')
+          VERSION=$(grep -m1 -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' <<< "$NOTES")
+          SHA=$(sha256sum "$ZIP" | awk '{print $1}')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update formula and commit changes
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA: ${{ steps.release.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          FILE="Formula/emulicious.rb"
+          sed -i -E "s/^  version \".*\"$/  version \"${VERSION}\"/" "$FILE"
+          sed -i -E "s/^  sha256 \".*\"$/  sha256 \"${SHA}\"/" "$FILE"
+          ruby -c "$FILE"
+
+          if git diff --quiet -- "$FILE"; then
+            echo "Emulicious is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: bump emulicious to ${VERSION}"
+          # Other formula updaters may have pushed while the zip was downloading.
+          git pull --rebase origin "$DEFAULT_BRANCH"
+          git push origin "HEAD:$DEFAULT_BRANCH"

@@ -1,0 +1,91 @@
+name: Update GBDK-2020 Formula
+
+on:
+  schedule:
+    - cron: "47 12 * * *"  # run daily at 12:47 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-gbdk-2020
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Get latest stable release and compute SHA256s
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RELEASE=$(curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/gbdk-2020/gbdk-2020/releases/latest)
+          # Tags are plain versions such as 4.5.0; gbdk-next is a prerelease.
+          VERSION=$(jq -er '
+            select(.draft == false and .prerelease == false)
+            | .tag_name
+            | capture("^v?(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$").version
+          ' <<< "$RELEASE")
+          TAG=$(jq -er '.tag_name' <<< "$RELEASE")
+
+          TARBALL=$(mktemp)
+          trap 'rm -f "$TARBALL"' EXIT
+          for ASSET in gbdk-macos-arm64.tar.gz gbdk-macos.tar.gz; do
+            URL="https://github.com/gbdk-2020/gbdk-2020/releases/download/${TAG}/${ASSET}"
+            # Fail rather than publish a version whose macOS assets are not available yet.
+            jq -e --arg url "$URL" '.assets | any(.browser_download_url == $url)' \
+              <<< "$RELEASE" > /dev/null
+            curl --fail --location --retry 3 "$URL" --output "$TARBALL"
+            SHA=$(sha256sum "$TARBALL" | awk '{print $1}')
+            if [ "$ASSET" = "gbdk-macos-arm64.tar.gz" ]; then
+              echo "arm_sha256=$SHA" >> "$GITHUB_OUTPUT"
+            else
+              echo "intel_sha256=$SHA" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Update formula and commit changes
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          ARM_SHA: ${{ steps.release.outputs.arm_sha256 }}
+          INTEL_SHA: ${{ steps.release.outputs.intel_sha256 }}
+        run: |
+          set -euo pipefail
+          FILE="Formula/gbdk-2020.rb"
+          # Each sha256 line directly follows the url line of its architecture.
+          perl -0pi -e '
+            s{/releases/download/[^/]+/gbdk-macos}{/releases/download/$ENV{TAG}/gbdk-macos}g;
+            s{(gbdk-macos-arm64\.tar\.gz"\n\s+sha256 ")[0-9a-f]{64}}{$1$ENV{ARM_SHA}};
+            s{(gbdk-macos\.tar\.gz"\n\s+sha256 ")[0-9a-f]{64}}{$1$ENV{INTEL_SHA}};
+          ' "$FILE"
+          ruby -c "$FILE"
+          [ "$(grep -c "/download/${TAG}/gbdk-macos" "$FILE")" -eq 2 ]
+          grep -q "sha256 \"${ARM_SHA}\"" "$FILE"
+          grep -q "sha256 \"${INTEL_SHA}\"" "$FILE"
+
+          if git diff --quiet -- "$FILE"; then
+            echo "GBDK-2020 is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: bump gbdk-2020 to v${VERSION}"
+          # Other formula updaters may have pushed while the tarballs were downloading.
+          git pull --rebase origin "$DEFAULT_BRANCH"
+          git push origin "HEAD:$DEFAULT_BRANCH"
