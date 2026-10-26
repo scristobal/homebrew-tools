@@ -1,0 +1,87 @@
+name: Update Furnace Cask
+
+on:
+  schedule:
+    - cron: "52 12 * * *"  # run daily at 12:52 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-furnace
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Get latest stable release and compute SHA256s
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RELEASE=$(curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/tildearrow/furnace/releases/latest)
+          # Versions have three or four parts (0.6.8, 0.6.8.3); 0.6.8pre1 and similar are prereleases.
+          VERSION=$(jq -er '
+            select(.draft == false and .prerelease == false)
+            | .tag_name
+            | capture("^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?)$").version
+          ' <<< "$RELEASE")
+
+          DMG=$(mktemp)
+          trap 'rm -f "$DMG"' EXIT
+          for ARCH in arm64 Intel; do
+            URL="https://github.com/tildearrow/furnace/releases/download/v${VERSION}/furnace-${VERSION}-mac-${ARCH}.dmg"
+            # Fail rather than publish a version whose macOS assets are not available yet.
+            jq -e --arg url "$URL" '.assets | any(.browser_download_url == $url)' \
+              <<< "$RELEASE" > /dev/null
+            curl --fail --location --retry 3 "$URL" --output "$DMG"
+            SHA=$(sha256sum "$DMG" | awk '{print $1}')
+            if [ "$ARCH" = "arm64" ]; then
+              echo "arm_sha256=$SHA" >> "$GITHUB_OUTPUT"
+            else
+              echo "intel_sha256=$SHA" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Update cask and commit changes
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          ARM_SHA: ${{ steps.release.outputs.arm_sha256 }}
+          INTEL_SHA: ${{ steps.release.outputs.intel_sha256 }}
+        run: |
+          set -euo pipefail
+          FILE="Casks/furnace.rb"
+          sed -i -E "s/^  version \".*\"$/  version \"${VERSION}\"/" "$FILE"
+          perl -pi -e '
+            s{^(  sha256 arm:   ")[0-9a-f]{64}}{$1$ENV{ARM_SHA}};
+            s{^(         intel: ")[0-9a-f]{64}}{$1$ENV{INTEL_SHA}};
+          ' "$FILE"
+          ruby -c "$FILE"
+          grep -q "^  version \"${VERSION}\"$" "$FILE"
+          grep -q "arm:   \"${ARM_SHA}\"" "$FILE"
+          grep -q "intel: \"${INTEL_SHA}\"" "$FILE"
+
+          if git diff --quiet -- "$FILE"; then
+            echo "Furnace is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: bump furnace to v${VERSION}"
+          # Other formula updaters may have pushed while the DMGs were downloading.
+          git pull --rebase origin "$DEFAULT_BRANCH"
+          git push origin "HEAD:$DEFAULT_BRANCH"

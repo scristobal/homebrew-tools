@@ -67,6 +67,42 @@ the SHA256, and commits version/checksum changes to the default branch. Between
 an upstream release and the next run, installs fail with a checksum mismatch;
 run the workflow manually to catch up sooner.
 
+hUGETracker (macOS)
+
+brew install --cask samu/tools/hugetracker
+
+The official build is Intel-only, so Apple Silicon Macs need Rosetta 2, and it
+is not signed at all. SHA256 verification and macOS Gatekeeper remain in place.
+If macOS blocks the app, review it and use System Settings > Privacy & Security
+> Open Anyway only if you trust the release. The cask moves the bundled sample
+songs into the app so File > Sample Songs lists them, and links the uge2source
+converter onto PATH; Gatekeeper blocks uge2source on first run too, so approve
+it the same way. On first launch hUGETracker copies its font to
+~/Library/Fonts and asks to be restarted. The FamiTracker keymap stays in
+$(brew --prefix)/Caskroom/hugetracker/<version>/Keymaps.
+
+.github/workflows/update-hugetracker.yml checks the latest stable GitHub release
+daily and can also be run manually. It downloads the mac zip, checks that it
+still contains the app, uge2source and Sample Songs, computes its SHA256, and
+commits version/checksum changes to the default branch.
+
+Furnace (macOS)
+
+brew install --cask samu/tools/furnace
+
+Installs the official Apple Silicon or Intel build, which is ad-hoc signed and
+not notarized. SHA256 verification and macOS Gatekeeper remain in place. If
+macOS blocks the app, review it and use System Settings > Privacy & Security >
+Open Anyway only if you trust the release. The furnace command runs the same
+binary for command-line rendering and export (furnace -help); Gatekeeper kills
+it until the app has been opened and approved once. The demos,
+instruments, wavetables and manual.pdf from the DMG stay in
+$(brew --prefix)/Caskroom/furnace/<version>.
+
+.github/workflows/update-furnace.yml checks the latest stable GitHub release
+daily and can also be run manually. It downloads both macOS DMGs, computes their
+SHA256s, and commits version/checksum changes to the default branch.
+
 Edit fork (macOS)
 
 brew unlink msedit
