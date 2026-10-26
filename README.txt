@@ -69,16 +69,25 @@ run the workflow manually to catch up sooner.
 
 hUGETracker (macOS)
 
-brew install samu/tools/hugetracker
-ln -sf "$(brew --prefix)/opt/hugetracker/hUGETracker.app" /Applications/
+brew install --cask samu/tools/hugetracker
 
-The official macOS build is Intel-only, so the formula builds a native one from
-the release tag instead (about two minutes). Homebrew has no Lazarus, so it
-builds lazbuild from a pinned Lazarus 3.8 source tarball for this build only,
-then builds the app and the uge2source converter with Homebrew's fpc. Built
-locally, the app is not quarantined, so Gatekeeper does not block it. It links
-Homebrew's SDL2, and runs Homebrew's rgbds and ffmpeg for ROM export and song
-rendering. Formulae cannot install into /Applications, hence the symlink.
+The official macOS build is Intel-only, so the hugetracker formula builds a
+native one from the release tag instead (about two minutes). Homebrew has no
+Lazarus, so it builds lazbuild from a pinned Lazarus 3.8 source tarball for
+this build only, then builds the app and the uge2source converter with
+Homebrew's fpc. Built locally, the app is not quarantined, so Gatekeeper does
+not block it. It links Homebrew's SDL2, and runs Homebrew's rgbds and ffmpeg
+for ROM export and song rendering.
+
+Formulae cannot install into /Applications, so the hugetracker cask depends on
+the formula and copies its app there; installing the cask builds the formula
+first. The cask downloads the release's source tarball only because every cask
+needs a download. The copy is refreshed whenever the cask is upgraded, which
+happens together with the formula on a version bump; after reinstalling only
+the formula, run brew reinstall --cask samu/tools/hugetracker as well. The
+formula alone also works: its app is in $(brew --prefix)/opt/hugetracker.
+brew audit --cask --online fails its Rosetta check for this cask, as for
+Emulicious, because the app only exists after the preflight copy.
 
 Three build fixes are applied: SDL2 is linked from Homebrew instead of a static
 /usr/local build; the app links with a 10.15 deployment target because the
@@ -93,8 +102,9 @@ $(brew --prefix)/share/hugetracker/Keymaps.
 
 .github/workflows/update-hugetracker.yml checks the latest stable GitHub release
 daily and can also be run manually. It resolves the release tag to its commit
-and commits tag/revision changes to the default branch. It does not build the
-new release, so run brew upgrade soon after a bump to catch build breaks.
+for the formula, computes the source tarball's SHA256 for the cask, and commits
+both in one change to the default branch. It does not build the new release,
+so run brew upgrade soon after a bump to catch build breaks.
 
 Furnace (macOS)
 

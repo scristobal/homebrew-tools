@@ -60,10 +60,13 @@ class Hugetracker < Formula
     contents = prefix/"hUGETracker.app/Contents"
     (contents/"MacOS").install "src/Release/hUGETracker"
     # The tracker runs these by name from its MacOS directory; apps opened from
-    # Finder do not have Homebrew on PATH.
-    # Link through opt so the bundle survives rgbds and ffmpeg upgrades.
-    %w[rgbasm rgblink rgbfix].each { |tool| ln_s formula_opt_bin("rgbds")/tool, contents/"MacOS" }
-    ln_s formula_opt_bin("ffmpeg")/"ffmpeg", contents/"MacOS"
+    # Finder do not have Homebrew on PATH. Homebrew makes symlinks into its prefix
+    # relative, which would break in the cask's copy in /Applications, so call
+    # the opt paths from exec scripts instead.
+    tools = %w[rgbasm rgblink rgbfix].map { |tool| formula_opt_bin("rgbds")/tool }
+    tools << (formula_opt_bin("ffmpeg")/"ffmpeg")
+    (contents/"MacOS").write_exec_script tools
+    chmod 0755, tools.map { |tool| contents/"MacOS"/tool.basename }
 
     rm_r Dir["src/hUGEDriver/.git*"]
     (contents/"Resources").install "graphics/hUGETracker.icns", "fonts/PixeliteTTF.ttf",
@@ -100,10 +103,9 @@ class Hugetracker < Formula
     <<~EOS
       hUGETracker.app was installed to:
         #{opt_prefix}/hUGETracker.app
-      To open it from Launchpad or Spotlight, link it into /Applications:
-        ln -sf #{opt_prefix}/hUGETracker.app /Applications/
-      On first launch hUGETracker copies its font to ~/Library/Fonts and asks to
-      be restarted. Settings live in ~/.config/hUGETracker.
+      To copy it into /Applications, install the cask, which reinstalls the copy
+      on every upgrade:
+        brew install --cask samu/tools/hugetracker
     EOS
   end
 

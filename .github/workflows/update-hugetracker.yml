@@ -1,4 +1,4 @@
-name: Update hUGETracker Formula
+name: Update hUGETracker Formula and Cask
 
 on:
   schedule:
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.repository.default_branch }}
-      - name: Get latest stable release and its commit
+      - name: Get latest stable release, its commit and source SHA256
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,29 +52,44 @@ jobs:
             echo "$REFS" >&2
             exit 1
           fi
+
+          # The cask only downloads the tag's source tarball to satisfy Homebrew.
+          TARBALL=$(mktemp)
+          trap 'rm -f "$TARBALL"' EXIT
+          curl --fail --location --retry 3 \
+            "https://github.com/SuperDisk/hUGETracker/archive/refs/tags/${TAG}.tar.gz" --output "$TARBALL"
+          SHA=$(sha256sum "$TARBALL" | awk '{print $1}')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
-      - name: Update formula and commit changes
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Update formula and cask and commit changes
         env:
           VERSION: ${{ steps.release.outputs.version }}
           REVISION: ${{ steps.release.outputs.revision }}
+          SHA: ${{ steps.release.outputs.sha256 }}
         run: |
           set -euo pipefail
-          FILE="Formula/hugetracker.rb"
-          sed -i -E "s/^(      tag:      \")v[^\"]+(\",)$/\1v${VERSION}\2/" "$FILE"
-          sed -i -E "s/^(      revision: \")[0-9a-f]{40}(\")$/\1${REVISION}\2/" "$FILE"
-          ruby -c "$FILE"
-          grep -q "tag:      \"v${VERSION}\"," "$FILE"
-          grep -q "revision: \"${REVISION}\"" "$FILE"
+          FORMULA="Formula/hugetracker.rb"
+          sed -i -E "s/^(      tag:      \")v[^\"]+(\",)$/\1v${VERSION}\2/" "$FORMULA"
+          sed -i -E "s/^(      revision: \")[0-9a-f]{40}(\")$/\1${REVISION}\2/" "$FORMULA"
+          ruby -c "$FORMULA"
+          grep -q "tag:      \"v${VERSION}\"," "$FORMULA"
+          grep -q "revision: \"${REVISION}\"" "$FORMULA"
 
-          if git diff --quiet -- "$FILE"; then
+          # The cask copies the formula's app, so both move to the same release together.
+          CASK="Casks/hugetracker.rb"
+          sed -i -E "s/^  version \".*\"$/  version \"${VERSION}\"/" "$CASK"
+          sed -i -E "s/^  sha256 \".*\"$/  sha256 \"${SHA}\"/" "$CASK"
+          ruby -c "$CASK"
+
+          if git diff --quiet -- "$FORMULA" "$CASK"; then
             echo "hUGETracker is already up to date"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$FILE"
+          git add "$FORMULA" "$CASK"
           git commit -m "chore: bump hugetracker to v${VERSION}"
           # Other formula updaters may have pushed while this job was running.
           git pull --rebase origin "$DEFAULT_BRANCH"
