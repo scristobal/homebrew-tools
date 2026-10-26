@@ -69,22 +69,32 @@ run the workflow manually to catch up sooner.
 
 hUGETracker (macOS)
 
-brew install --cask samu/tools/hugetracker
+brew install samu/tools/hugetracker
+ln -sf "$(brew --prefix)/opt/hugetracker/hUGETracker.app" /Applications/
 
-The official build is Intel-only, so Apple Silicon Macs need Rosetta 2, and it
-is not signed at all. SHA256 verification and macOS Gatekeeper remain in place.
-If macOS blocks the app, review it and use System Settings > Privacy & Security
-> Open Anyway only if you trust the release. The cask moves the bundled sample
-songs into the app so File > Sample Songs lists them, and links the uge2source
-converter onto PATH; Gatekeeper blocks uge2source on first run too, so approve
-it the same way. On first launch hUGETracker copies its font to
-~/Library/Fonts and asks to be restarted. The FamiTracker keymap stays in
-$(brew --prefix)/Caskroom/hugetracker/<version>/Keymaps.
+The official macOS build is Intel-only, so the formula builds a native one from
+the release tag instead (about two minutes). Homebrew has no Lazarus, so it
+builds lazbuild from a pinned Lazarus 3.8 source tarball for this build only,
+then builds the app and the uge2source converter with Homebrew's fpc. Built
+locally, the app is not quarantined, so Gatekeeper does not block it. It links
+Homebrew's SDL2, and runs Homebrew's rgbds and ffmpeg for ROM export and song
+rendering. Formulae cannot install into /Applications, hence the symlink.
+
+Three build fixes are applied: SDL2 is linked from Homebrew instead of a static
+/usr/local build; the app links with a 10.15 deployment target because the
+current Apple linker rejects FPC 3.2.2's Objective-C method lists otherwise
+(https://gitlab.com/freepascal.org/fpc/source/-/issues/41868); and the .sym
+parser skips the constants rgbds 1.0 adds to symbol files, which crashed it.
+
+The example songs are under Help > Example Songs. On first launch hUGETracker
+copies its font to ~/Library/Fonts and asks to be restarted; settings live in
+~/.config/hUGETracker. The FamiTracker keymap is in
+$(brew --prefix)/share/hugetracker/Keymaps.
 
 .github/workflows/update-hugetracker.yml checks the latest stable GitHub release
-daily and can also be run manually. It downloads the mac zip, checks that it
-still contains the app, uge2source and Sample Songs, computes its SHA256, and
-commits version/checksum changes to the default branch.
+daily and can also be run manually. It resolves the release tag to its commit
+and commits tag/revision changes to the default branch. It does not build the
+new release, so run brew upgrade soon after a bump to catch build breaks.
 
 Furnace (macOS)
 

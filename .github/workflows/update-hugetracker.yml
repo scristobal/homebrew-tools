@@ -1,4 +1,4 @@
-name: Update hUGETracker Cask
+name: Update hUGETracker Formula
 
 on:
   schedule:
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.repository.default_branch }}
-      - name: Get latest stable release and compute SHA256
+      - name: Get latest stable release and its commit
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,36 +37,35 @@ jobs:
             | .tag_name
             | capture("^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$").version
           ' <<< "$RELEASE")
-          URL="https://github.com/SuperDisk/hUGETracker/releases/download/v${VERSION}/hUGETracker-${VERSION}-mac.zip"
-          # Fail rather than publish a version whose macOS asset is not available yet.
-          jq -e --arg url "$URL" '.assets | any(.browser_download_url == $url)' \
-            <<< "$RELEASE" > /dev/null
 
-          ZIP=$(mktemp)
-          trap 'rm -f "$ZIP"' EXIT
-          curl --fail --location --retry 3 "$URL" --output "$ZIP"
-          # The cask installs these entries and its preflight moves Sample Songs into the app.
-          ENTRIES=$(unzip -Z1 "$ZIP")
-          for ENTRY in "hUGETracker.app/" "uge2source" "Sample Songs/"; do
-            if ! grep -qxF "$ENTRY" <<< "$ENTRIES"; then
-              echo "Expected ${ENTRY} at the top of the zip, found:" >&2
-              echo "$ENTRIES" >&2
-              exit 1
-            fi
-          done
-          SHA=$(sha256sum "$ZIP" | awk '{print $1}')
+          # The formula builds from git so it gets the submodules; pin the tagged
+          # commit, peeling it first if the tag is annotated.
+          TAG="v${VERSION}"
+          REFS=$(git ls-remote --tags https://github.com/SuperDisk/hUGETracker.git "$TAG" "${TAG}^{}")
+          REVISION=$(awk -v tag="refs/tags/$TAG" '
+            $2 == tag "^{}" { peeled = $1 }
+            $2 == tag { direct = $1 }
+            END { print (peeled != "" ? peeled : direct) }
+          ' <<< "$REFS")
+          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve ${TAG} to a commit, found:" >&2
+            echo "$REFS" >&2
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
-      - name: Update cask and commit changes
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+      - name: Update formula and commit changes
         env:
           VERSION: ${{ steps.release.outputs.version }}
-          SHA: ${{ steps.release.outputs.sha256 }}
+          REVISION: ${{ steps.release.outputs.revision }}
         run: |
           set -euo pipefail
-          FILE="Casks/hugetracker.rb"
-          sed -i -E "s/^  version \".*\"$/  version \"${VERSION}\"/" "$FILE"
-          sed -i -E "s/^  sha256 \".*\"$/  sha256 \"${SHA}\"/" "$FILE"
+          FILE="Formula/hugetracker.rb"
+          sed -i -E "s/^(      tag:      \")v[^\"]+(\",)$/\1v${VERSION}\2/" "$FILE"
+          sed -i -E "s/^(      revision: \")[0-9a-f]{40}(\")$/\1${REVISION}\2/" "$FILE"
           ruby -c "$FILE"
+          grep -q "tag:      \"v${VERSION}\"," "$FILE"
+          grep -q "revision: \"${REVISION}\"" "$FILE"
 
           if git diff --quiet -- "$FILE"; then
             echo "hUGETracker is already up to date"
@@ -77,6 +76,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$FILE"
           git commit -m "chore: bump hugetracker to v${VERSION}"
-          # Other formula updaters may have pushed while the zip was downloading.
+          # Other formula updaters may have pushed while this job was running.
           git pull --rebase origin "$DEFAULT_BRANCH"
           git push origin "HEAD:$DEFAULT_BRANCH"
