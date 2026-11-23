@@ -4,11 +4,11 @@ class Gbdk2020 < Formula
   license :cannot_represent
 
   if Hardware::CPU.arm?
-    url "https://github.com/gbdk-2020/gbdk-2020/releases/download/4.5.0/gbdk-macos-arm64.tar.gz"
-    sha256 "289ee60e46c5a2785a21e35533f84a5131ed4a063b21b0dbdedc9a10af15bf78"
+    url "https://github.com/gbdk-2020/gbdk-2020/releases/download/4.6.0/gbdk-macos-arm64.tar.gz"
+    sha256 "36bf2b005d5a87c7c343e0ddafb42f53578bf22e52a78f17c4aa74b80e71bc8a"
   else
-    url "https://github.com/gbdk-2020/gbdk-2020/releases/download/4.5.0/gbdk-macos.tar.gz"
-    sha256 "1aa549d12032d8f6509d11923bb28b1a453098f42597feb378e9a42541f8fd89"
+    url "https://github.com/gbdk-2020/gbdk-2020/releases/download/4.6.0/gbdk-macos.tar.gz"
+    sha256 "490748e5f100ae2421aef38196ac93c76c2af86efc81edf817bc4d0af725ad44"
   end
 
   livecheck do
