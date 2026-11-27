@@ -1,8 +1,8 @@
 class ShaderLanguageServer < Formula
   desc "Language server for HLSL, GLSL and WGSL shaders"
   homepage "https://github.com/antaalt/shader-sense"
-  url "https://static.crates.io/crates/shader_language_server/shader_language_server-1.6.2.crate"
-  sha256 "3eb11ba123a0c6a1f43ebac46f3a7423d9d12ff56183711b5bea692fbb203ae4"
+  url "https://static.crates.io/crates/shader_language_server/shader_language_server-2.0.0.crate"
+  sha256 "90f0c76bdab7cb041e44356f61fd0415b99aa9cd9228e838e2ae3d6346005b3c"
   license "MIT"
 
   depends_on "rust" => :build
